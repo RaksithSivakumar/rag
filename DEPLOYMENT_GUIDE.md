@@ -29,6 +29,9 @@ In your Render dashboard, add these environment variables:
 ```
 GEMINI_API_KEY=your-gemini-api-key-here
 AUTHORIZE_TOKEN=your-auth-token-here
+FAISS_NO_AVX2=1
+FAISS_NO_GPU=1
+FAISS_CPU_ONLY=1
 ```
 
 ### 3. Deploy to Render

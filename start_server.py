@@ -8,6 +8,13 @@ import time
 import logging
 from pathlib import Path
 
+# Configure FAISS for CPU-only deployment
+os.environ['FAISS_NO_AVX2'] = '1'
+os.environ['FAISS_NO_GPU'] = '1'
+os.environ['FAISS_DISABLE_GPU'] = '1'
+os.environ['FAISS_CPU_ONLY'] = '1'
+os.environ['FAISS_NO_CUDA'] = '1'
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,

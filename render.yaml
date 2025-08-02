@@ -12,5 +12,11 @@ services:
         sync: false
       - key: AUTHORIZE_TOKEN
         sync: false
+      - key: FAISS_NO_AVX2
+        value: "1"
+      - key: FAISS_NO_GPU
+        value: "1"
+      - key: FAISS_CPU_ONLY
+        value: "1"
     # Optional: Add health check
     healthCheckPath: /api/v1/health 

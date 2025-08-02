@@ -1,10 +1,14 @@
+import os
+# Disable GPU loading for FAISS at application startup
+os.environ['FAISS_NO_AVX2'] = '1'
+os.environ['FAISS_NO_GPU'] = '1'
+
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from utils.pdf_utils import extract_text_from_pdf, chunk_text
 from utils.embed_utils import insert_into_faiss, search_similar_chunks
 import google.generativeai as genai
-import os
 import asyncio
 import hashlib
 import re
@@ -436,6 +440,7 @@ Instructions:
 - Include numbers/percentages if present
 - Keep answer under 40 words
 - Be factual and concise
+- Give the response soon to the user within 20 seconds
 
 Context:
 {context}

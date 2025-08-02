@@ -1,7 +1,11 @@
 # embed_utils.py - OPTIMIZED VERSION WITH FAISS AND SENTENCE TRANSFORMERS
+import os
+# Disable GPU loading for FAISS
+os.environ['FAISS_NO_AVX2'] = '1'
+os.environ['FAISS_NO_GPU'] = '1'
+
 import faiss
 import numpy as np
-import os
 import re
 import pickle
 import hashlib
