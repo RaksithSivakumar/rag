@@ -14,6 +14,7 @@ This document outlines the migration from Google's embedding API to sentence tra
 - **Replaced Google Embedding API** with sentence transformers
 - **Model**: `all-MiniLM-L6-v2` (384 dimensions vs 1024)
 - **Speed**: Local processing, no API calls
+- **FAISS**: CPU-only implementation for maximum compatibility
 - **Caching**: Enhanced caching for repeated embeddings
 - **Batch Processing**: Optimized for 15-second target
 
@@ -69,7 +70,7 @@ model = SentenceTransformer('all-MiniLM-L6-v2')
 ### FAISS Configuration
 ```python
 DIMENSION = 384  # Reduced from 1024
-index = faiss.IndexFlatIP(DIMENSION)  # Inner product for cosine similarity
+index = faiss.IndexFlatIP(DIMENSION)  # CPU-only inner product for cosine similarity
 ```
 
 ### Chunking Strategy
@@ -101,7 +102,8 @@ python test_sentence_transformers.py
 1. **First Run**: Sentence transformer model will be downloaded (~60MB)
 2. **Memory Usage**: Model loaded in memory (~200MB)
 3. **CPU Usage**: Local embedding generation uses CPU
-4. **Fallback**: Automatic fallback to smaller model if needed
+4. **FAISS**: CPU-only implementation, no GPU dependencies
+5. **Fallback**: Automatic fallback to smaller model if needed
 
 ## Troubleshooting
 

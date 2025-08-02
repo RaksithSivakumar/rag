@@ -48,7 +48,7 @@ embedding_cache = TTLCache(maxsize=1000, ttl=3600)  # 1 hour
 search_cache = TTLCache(maxsize=500, ttl=1800)  # 30 minutes
 
 class FAISSVectorStore:
-    """High-performance local vector store using FAISS"""
+    """High-performance local vector store using CPU-only FAISS"""
     
     def __init__(self, dimension: int = DIMENSION):
         self.dimension = dimension
@@ -68,14 +68,14 @@ class FAISSVectorStore:
                 self.vector_count = len(self.metadata)
                 logger.info(f"Loaded existing FAISS index with {self.vector_count} vectors")
             else:
-                # Create new index
-                self.index = faiss.IndexFlatIP(self.dimension)  # Inner product for cosine similarity
+                # Create new CPU-only index
+                self.index = faiss.IndexFlatIP(self.dimension)  # CPU-only inner product for cosine similarity
                 self.metadata = []
                 self.vector_count = 0
                 logger.info("Created new FAISS index")
         except Exception as e:
             logger.error(f"Error loading/creating FAISS index: {e}")
-            # Fallback to new index
+            # Fallback to new CPU-only index
             self.index = faiss.IndexFlatIP(self.dimension)
             self.metadata = []
             self.vector_count = 0
@@ -91,7 +91,7 @@ class FAISSVectorStore:
             logger.error(f"Error saving FAISS index: {e}")
     
     def add_vectors(self, vectors: List[np.ndarray], metadata_list: List[Dict[str, Any]]):
-        """Add vectors to the index - OPTIMIZED for speed"""
+        """Add vectors to the index - OPTIMIZED for CPU speed"""
         if not vectors or not metadata_list:
             return
         
@@ -99,7 +99,7 @@ class FAISSVectorStore:
         vectors_np = np.array(vectors, dtype=np.float32)
         faiss.normalize_L2(vectors_np)
         
-        # Add to index in one batch for speed
+        # Add to index in one batch for CPU speed
         self.index.add(vectors_np)
         
         # Add metadata
@@ -154,7 +154,7 @@ class FAISSVectorStore:
         self._save_index()
         logger.info("Cleared FAISS index")
 
-# Initialize global vector store
+# Initialize global CPU-only vector store
 vector_store = FAISSVectorStore()
 
 def get_embedding(text: str, task_type: str = "retrieval_document") -> np.ndarray:

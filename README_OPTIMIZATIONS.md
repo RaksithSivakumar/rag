@@ -216,7 +216,7 @@ The system automatically handles migration:
 
 ## Future Optimizations
 
-1. **GPU Acceleration**: Use FAISS-GPU for even faster searches
+1. **CPU Optimization**: Further optimize FAISS-CPU for faster searches
 2. **Distributed Caching**: Redis for multi-server deployments
 3. **Async Embeddings**: Batch embedding generation
 4. **Compression**: Compress FAISS index for smaller storage
