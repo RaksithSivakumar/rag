@@ -7,9 +7,10 @@ python-multipart
 PyPDF2>=3.0.0
 pdfplumber>=0.9.0
 
-# Vector database and embeddings - REPLACED PINECONE WITH FAISS
+# Vector database and embeddings - USING FAISS WITH SENTENCE TRANSFORMERS
 faiss-cpu>=1.7.4
 google-generativeai>=0.3.0
+sentence-transformers>=2.2.0
 
 # Data validation and environment
 pydantic>=2.0.0

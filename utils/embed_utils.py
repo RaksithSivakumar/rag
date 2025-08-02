@@ -1,5 +1,4 @@
-# embed_utils.py - OPTIMIZED VERSION WITH FAISS
-import google.generativeai as genai
+# embed_utils.py - OPTIMIZED VERSION WITH FAISS AND SENTENCE TRANSFORMERS
 import faiss
 import numpy as np
 import os
@@ -14,6 +13,7 @@ from pathlib import Path
 import joblib
 from cachetools import TTLCache
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from sentence_transformers import SentenceTransformer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -22,14 +22,26 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-# Setup - Use environment variables for security
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
-genai.configure(api_key=GOOGLE_API_KEY)
-
 # FAISS Index Configuration
 FAISS_INDEX_PATH = "faiss_index"
 FAISS_METADATA_PATH = "faiss_metadata.pkl"
-DIMENSION = 1024  # Google's embedding dimension
+
+# Initialize Sentence Transformer model
+try:
+    # Use a fast and efficient model for 15-second response time
+    model = SentenceTransformer('all-MiniLM-L6-v2')  # 384 dimensions, very fast
+    DIMENSION = 384
+    logger.info("Loaded all-MiniLM-L6-v2 sentence transformer model")
+except Exception as e:
+    logger.error(f"Error loading sentence transformer model: {e}")
+    # Fallback to a smaller model
+    try:
+        model = SentenceTransformer('paraphrase-MiniLM-L3-v2')  # 384 dimensions, even faster
+        DIMENSION = 384
+        logger.info("Loaded paraphrase-MiniLM-L3-v2 sentence transformer model")
+    except Exception as e2:
+        logger.error(f"Error loading fallback model: {e2}")
+        raise Exception("Could not load any sentence transformer model")
 
 # Caching for embeddings and search results
 embedding_cache = TTLCache(maxsize=1000, ttl=3600)  # 1 hour
@@ -95,7 +107,7 @@ class FAISSVectorStore:
         self.vector_count += len(vectors)
         
         # Save less frequently for speed
-        if self.vector_count % 10000 == 0:  # Increased from 5000 to 10000 for ultra-fast processing
+        if self.vector_count % 5000 == 0:  # Optimized for 15-second target
             self._save_index()
         
         logger.info(f"Added {len(vectors)} vectors to FAISS index. Total: {self.vector_count}")
@@ -146,7 +158,7 @@ class FAISSVectorStore:
 vector_store = FAISSVectorStore()
 
 def get_embedding(text: str, task_type: str = "retrieval_document") -> np.ndarray:
-    """Get embedding with ultra-fast caching for 30-second target"""
+    """Get embedding using sentence transformers for 15-second response time"""
     # Create cache key
     cache_key = f"{hashlib.md5(text.encode()).hexdigest()}:{task_type}"
     
@@ -157,18 +169,15 @@ def get_embedding(text: str, task_type: str = "retrieval_document") -> np.ndarra
         if not text or not text.strip():
             raise ValueError("Text cannot be empty")
         
-        # Clean text before embedding - ULTRA-OPTIMIZED for speed
+        # Clean text before embedding - OPTIMIZED for sentence transformers
         text = text.strip()
-        if len(text) > 2000:  # Increased from 1500 to 2000 for better first request quality
-            text = text[:2000]
-            logger.info(f"Truncated text to 2000 characters for better embedding quality")
+        if len(text) > 4000:  # Increased for page-based chunks
+            text = text[:4000]
+            logger.info(f"Truncated text to 4000 characters for sentence transformer")
         
-        res = genai.embed_content(
-            model="models/embedding-001",
-            content=text,
-            task_type=task_type
-        )
-        embedding = np.array(res["embedding"], dtype=np.float32)
+        # Use sentence transformer for embedding
+        embedding = model.encode(text, convert_to_numpy=True, show_progress_bar=False)
+        embedding = embedding.astype(np.float32)
         
         # Ensure exactly DIMENSION dimensions
         if len(embedding) < DIMENSION:
@@ -221,20 +230,20 @@ def preprocess_query(query: str) -> List[str]:
     return list(set(variations))  # Remove duplicates
 
 def insert_into_faiss(chunks: List[str], metadata: Dict[str, Any] = {}):
-    """Insert chunks into FAISS index with enhanced metadata and advanced multithreading"""
+    """Insert chunks into FAISS index with sentence transformers for 15-second response time"""
     try:
         if not chunks:
             logger.info("No chunks to insert")
             return
         
-        logger.info(f"Starting to process {len(chunks)} chunks with advanced multithreading...")
+        logger.info(f"Starting to process {len(chunks)} chunks with sentence transformers...")
         
         # Enhanced metadata with processing info
         base_metadata = {
             **metadata,
             'insertion_timestamp': datetime.now().isoformat(),
             'total_chunks': len(chunks),
-            'processing_version': '5.0_faiss_advanced_multithreading'
+            'processing_version': '6.0_faiss_sentence_transformers'
         }
         
         # Prepare chunk data for multithreading
@@ -265,10 +274,10 @@ def insert_into_faiss(chunks: List[str], metadata: Dict[str, Any] = {}):
         
         # Calculate optimal worker count based on system resources
         cpu_count = multiprocessing.cpu_count()
-        max_workers = min(cpu_count * 2, 12)  # Increased max workers
+        max_workers = min(cpu_count * 2, 8)  # Optimized for sentence transformers
         
         # Process in batches for better memory management
-        batch_size = 20  # Reduced from 30 to 20 for better first request stability
+        batch_size = 15  # Optimized for 15-second target
         
         for batch_start in range(0, len(chunk_data), batch_size):
             batch_end = min(batch_start + batch_size, len(chunk_data))
@@ -307,7 +316,7 @@ def insert_into_faiss(chunks: List[str], metadata: Dict[str, Any] = {}):
         # Add to FAISS index
         if vectors:
             vector_store.add_vectors(vectors, metadata_list)
-            logger.info(f"Successfully inserted {successful_chunks} vectors into FAISS using advanced multithreading")
+            logger.info(f"Successfully inserted {successful_chunks} vectors into FAISS using sentence transformers")
             logger.info(f"Failed to process {failed_chunks} chunks")
             
             # Get updated stats
@@ -322,7 +331,7 @@ def insert_into_faiss(chunks: List[str], metadata: Dict[str, Any] = {}):
         raise
 
 def search_similar_chunks(query: str, top_k: int = 1, similarity_threshold: float = 0.3) -> List[str]:
-    """Ultra-fast similarity search optimized for 18-second target"""
+    """Ultra-fast similarity search optimized for 15-second target with sentence transformers"""
     try:
         if not query or not query.strip():
             raise ValueError("Query cannot be empty")
@@ -341,7 +350,7 @@ def search_similar_chunks(query: str, top_k: int = 1, similarity_threshold: floa
         seen_texts = set()
         
         # Search with only 1 query variation for maximum speed
-        for variation in query_variations[:1]:  # Reduced to 1 for ultra-fast processing
+        for variation in query_variations[:1]:  # Single variation for 15-second target
             try:
                 query_vector = get_embedding(variation, "retrieval_query")
                 results = vector_store.search(query_vector, top_k * 2, similarity_threshold)

@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Configure Gemini API
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-chat_model = genai.GenerativeModel('gemini-1.5-pro')
+chat_model = genai.GenerativeModel('gemini-2.5-flash')
 
 app = FastAPI(title="PDF Bot API", root_path="/api/v1")
 
@@ -62,12 +62,12 @@ except ImportError:
         limits=httpx.Limits(max_keepalive_connections=50, max_connections=200)
     )
 
-# Optimized thread pools with ultra-fast multithreading for 12+ questions
+# Optimized thread pools for 15-second response time with sentence transformers
 # Calculate optimal thread counts based on CPU cores
 cpu_count = multiprocessing.cpu_count()
-cpu_executor = ThreadPoolExecutor(max_workers=min(cpu_count * 16, 128))  # Increased to 16x CPU cores, max 128
-io_executor = ThreadPoolExecutor(max_workers=min(cpu_count * 12, 96))   # Increased to 12x CPU cores, max 96
-process_executor = ProcessPoolExecutor(max_workers=min(cpu_count * 8, 48))  # Increased to 8x CPU cores, max 48
+cpu_executor = ThreadPoolExecutor(max_workers=min(cpu_count * 8, 64))   # Optimized for sentence transformers
+io_executor = ThreadPoolExecutor(max_workers=min(cpu_count * 6, 48))    # Optimized for sentence transformers
+process_executor = ProcessPoolExecutor(max_workers=min(cpu_count * 4, 32))  # Optimized for sentence transformers
 
 # Compiled regex patterns
 whitespace_pattern = re.compile(r'\s+')
@@ -138,7 +138,7 @@ async def process_document_content_async(content: bytes, source_name: str) -> di
             raise HTTPException(status_code=400, detail="No text found in document")
 
         text = clean_extracted_text(text)
-        chunks = chunk_text(text, chunk_size=3000, overlap=100)  # Reduced chunk size for better first request stability
+        chunks = chunk_text(text, chunk_size=10000, overlap=0)  # Page-based chunking for sentence transformers
         if not chunks:
             raise HTTPException(status_code=400, detail="Failed to chunk document")
 
@@ -151,7 +151,7 @@ async def process_document_content_async(content: bytes, source_name: str) -> di
         })
 
         processing_time = time.time() - start_time
-        logger.info(f"Document processing completed in {processing_time:.2f}s")
+        logger.info(f"Document processing completed in {processing_time:.2f}s with sentence transformers")
 
         return {
             "chunks_created": len(chunks),
@@ -165,7 +165,7 @@ async def process_document_content_async(content: bytes, source_name: str) -> di
     try:
         result = await asyncio.wait_for(
             loop.run_in_executor(cpu_executor, process_sync),
-            timeout=35.0  # Increased timeout to 35 seconds for first request processing
+            timeout=25.0  # Reduced timeout for 15-second target
         )
         document_cache[content_hash] = result
         return result
@@ -192,11 +192,11 @@ def process_chunk_with_embedding(chunk_data):
         }
 
 async def process_questions_multithreaded(questions: list, content_hash: str) -> list:
-    """Process multiple questions concurrently with enhanced multithreading"""
+    """Process multiple questions concurrently with sentence transformers for 15-second target"""
     if not questions:
         return []
     
-    logger.info(f"Processing {len(questions)} questions with enhanced multithreading...")
+    logger.info(f"Processing {len(questions)} questions with sentence transformers...")
     
     # Create tasks for concurrent processing
     tasks = []
@@ -206,7 +206,7 @@ async def process_questions_multithreaded(questions: list, content_hash: str) ->
             tasks.append(task)
     
     # Enhanced concurrency with adaptive semaphore
-    max_concurrent = min(len(tasks), 6)  # Increased from 3 to 6 for better parallelism
+    max_concurrent = min(len(tasks), 4)  # Optimized for 15-second target
     semaphore = asyncio.Semaphore(max_concurrent)
     
     async def process_with_semaphore(task):
@@ -214,7 +214,7 @@ async def process_questions_multithreaded(questions: list, content_hash: str) ->
             return await task
     
     # Process in batches for better resource management
-    batch_size = 4  # Process 4 questions at a time
+    batch_size = 3  # Process 3 questions at a time for 15-second target
     all_results = []
     
     for i in range(0, len(tasks), batch_size):
@@ -275,7 +275,7 @@ async def process_questions_medium_batch(questions: list, content_hash: str) -> 
     tasks = [process_question_async(q, content_hash) for q in questions if q.strip()]
     
     # Use semaphore for controlled concurrency
-    semaphore = asyncio.Semaphore(4)  # Allow 4 concurrent questions
+    semaphore = asyncio.Semaphore(3)  # Allow 3 concurrent questions for 15-second target
     
     async def process_with_semaphore(task):
         async with semaphore:
@@ -297,7 +297,7 @@ async def process_questions_large_batch(questions: list, content_hash: str) -> l
     tasks = [process_question_async(q, content_hash) for q in questions if q.strip()]
     
     # Enhanced concurrency with adaptive semaphore
-    max_concurrent = min(len(tasks), 8)  # Increased to 8 for large batches
+    max_concurrent = min(len(tasks), 6)  # Optimized for 15-second target
     semaphore = asyncio.Semaphore(max_concurrent)
     
     async def process_with_semaphore(task):
@@ -305,7 +305,7 @@ async def process_questions_large_batch(questions: list, content_hash: str) -> l
             return await task
     
     # Process in smaller batches for better resource management
-    batch_size = 5  # Smaller batches for large question sets
+    batch_size = 4  # Smaller batches for 15-second target
     all_results = []
     
     for i in range(0, len(tasks), batch_size):
@@ -348,7 +348,7 @@ async def process_questions_ultra_aggressive(questions: list, content_hash: str)
     tasks = [process_question_async(q, content_hash) for q in questions if q.strip()]
 
     # Increase concurrency and batch size
-    max_concurrent = min(len(tasks), 32)  # Increased from 20 to 32
+    max_concurrent = min(len(tasks), 16)  # Optimized for 15-second target
     semaphore = asyncio.Semaphore(max_concurrent)
 
     async def process_with_semaphore(task):
@@ -357,7 +357,7 @@ async def process_questions_ultra_aggressive(questions: list, content_hash: str)
 
     logger.info(f"Starting ultra-aggressive processing with {max_concurrent} concurrent questions")
 
-    batch_size = 5  # Increased from 3 to 5
+    batch_size = 4  # Optimized for 15-second target
     all_results = []
 
     for i in range(0, len(tasks), batch_size):
@@ -382,7 +382,7 @@ async def process_questions_high_concurrency(questions: list, content_hash: str)
     tasks = [process_question_async(q, content_hash) for q in questions if q.strip()]
     
     # High concurrency for medium batches
-    max_concurrent = min(len(tasks), 15)  # Reduced from 25 to 15 for better first request stability
+    max_concurrent = min(len(tasks), 8)  # Optimized for 15-second target
     semaphore = asyncio.Semaphore(max_concurrent)
     
     async def process_with_semaphore(task):
@@ -415,11 +415,11 @@ async def process_question_async(question: str, content_hash: str) -> str:
     loop = asyncio.get_event_loop()
     
     try:
-        # Use top_k=2 for better context coverage
+        # Use top_k=1 for faster processing with sentence transformers
         search_task = loop.run_in_executor(
-            io_executor, lambda: search_similar_chunks(question, top_k=2)
+            io_executor, lambda: search_similar_chunks(question, top_k=1)
         )
-        context_chunks = await asyncio.wait_for(search_task, timeout=2.0)
+        context_chunks = await asyncio.wait_for(search_task, timeout=1.5)
 
         if not context_chunks:
             return "Sorry, no relevant information found."
@@ -447,7 +447,7 @@ Answer:"""
         answer_task = loop.run_in_executor(
             cpu_executor, lambda: chat_model.generate_content(prompt)
         )
-        response = await asyncio.wait_for(answer_task, timeout=8.0)
+        response = await asyncio.wait_for(answer_task, timeout=6.0)
         answer = response.text.strip()
 
         qa_cache[cache_key] = answer
@@ -509,13 +509,8 @@ async def hackrx_run(request: HackRXRequest, token: str = Depends(verify_token))
             for answer in result_answers
         ]
 
-        total_time = time.time() - start_time
-        logger.info(f"Total request processing time: {total_time:.2f}s")
-
         return {
-            "answers": cleaned_answers,
-            # "processing_time": total_time,
-            # "document_hash": content_hash
+            "answers": cleaned_answers
         }
 
     except HTTPException:

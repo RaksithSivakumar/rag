@@ -123,46 +123,99 @@ def clean_extracted_text(text: str) -> str:
     
     return text.strip()
 
-def chunk_text(text: str, chunk_size: int = 2500, overlap: int = 200) -> List[str]:
+def chunk_text(text: str, chunk_size: int = 10000, overlap: int = 0) -> List[str]:
     """
-    Enhanced text chunking with better boundary detection and context preservation
-    OPTIMIZED for faster processing with larger chunks and less overlap
+    Page-based text chunking for whole page processing
+    OPTIMIZED for 15-second response time with sentence transformers
     
     Args:
         text (str): Text to be chunked
-        chunk_size (int): Target size of each chunk (increased for faster processing)
-        overlap (int): Overlap between chunks (reduced for faster processing)
+        chunk_size (int): Target size of each chunk (large for whole pages)
+        overlap (int): Overlap between chunks (0 for page-based)
         
     Returns:
-        List[str]: List of text chunks
+        List[str]: List of text chunks (one per page)
     """
     if not text or not text.strip():
         return []
     
-    logger.info(f"Chunking text of length {len(text)} with chunk_size={chunk_size}, overlap={overlap}")
+    logger.info(f"Chunking text of length {len(text)} by pages for sentence transformers")
     
-    # First, try to split by major sections (useful for policy documents)
+    # Split by page markers
+    page_pattern = r'--- Page \d+ ---'
+    pages = re.split(page_pattern, text)
+    
     chunks = []
-    sections = split_by_sections(text)
+    for i, page in enumerate(pages):
+        page = page.strip()
+        if len(page) > 200:  # Minimum page size
+            # Clean the page text
+            page = clean_extracted_text(page)
+            if page:
+                chunks.append(page)
     
-    for section in sections:
-        if len(section) <= chunk_size:
-            # Section fits in one chunk
-            chunks.append(section.strip())
-        else:
-            # Section needs to be split further
-            section_chunks = chunk_by_sentences(section, chunk_size, overlap)
-            chunks.extend(section_chunks)
+    # If no page markers found, split by large sections
+    if len(chunks) <= 1:
+        chunks = split_by_large_sections(text)
     
-    # Remove empty chunks and very short chunks
-    final_chunks = []
-    for chunk in chunks:
-        chunk = chunk.strip()
-        if len(chunk) > 100:  # Increased minimum chunk size for faster processing
-            final_chunks.append(chunk)
+    logger.info(f"Created {len(chunks)} page-based chunks for sentence transformers")
+    return chunks
+
+def split_by_large_sections(text: str) -> List[str]:
+    """
+    Split text by large sections for page-based chunking
     
-    logger.info(f"Created {len(final_chunks)} chunks (optimized for speed)")
-    return final_chunks
+    Args:
+        text (str): Input text
+        
+    Returns:
+        List[str]: List of large sections
+    """
+    # Split by major section headers or large paragraphs
+    section_patterns = [
+        r'\n\s*(?:SECTION|Section)\s+\d+',
+        r'\n\s*(?:CLAUSE|Clause)\s+\d+',
+        r'\n\s*(?:ARTICLE|Article)\s+\d+',
+        r'\n\s*\d+\.\s+[A-Z][A-Z\s]{10,}',  # Numbered major headings
+        r'\n\s*[A-Z]{3,}(?:\s+[A-Z]{3,})*\s*\n',  # ALL CAPS headings
+    ]
+    
+    # Try to find section breaks
+    split_points = [0]
+    
+    for pattern in section_patterns:
+        matches = list(re.finditer(pattern, text, re.IGNORECASE))
+        for match in matches:
+            if match.start() not in split_points:
+                split_points.append(match.start())
+    
+    split_points.append(len(text))
+    split_points.sort()
+    
+    sections = []
+    for i in range(len(split_points) - 1):
+        section = text[split_points[i]:split_points[i + 1]]
+        if section.strip() and len(section.strip()) > 500:  # Minimum section size
+            sections.append(section.strip())
+    
+    # If no major sections found, split by large paragraphs
+    if len(sections) <= 1:
+        paragraphs = text.split('\n\n')
+        sections = []
+        current_section = ""
+        
+        for paragraph in paragraphs:
+            if len(current_section + paragraph) < 8000:  # Max section size
+                current_section += "\n\n" + paragraph if current_section else paragraph
+            else:
+                if current_section:
+                    sections.append(current_section.strip())
+                current_section = paragraph
+        
+        if current_section:
+            sections.append(current_section.strip())
+    
+    return sections if sections else [text]
 
 def split_by_sections(text: str) -> List[str]:
     """
